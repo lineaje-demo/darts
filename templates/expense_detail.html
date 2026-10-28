@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ expense.merchant }}{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('expenses.index') }}">&larr; Expenses</a></p>
+<div class="page-head">
+  <h1>{{ expense.merchant }} <span class="status status-{{ expense.status }}">{{ expense.status }}</span></h1>
+  <strong class="amount">{{ expense.amount_cents|money }}</strong>
+</div>
+
+<div class="grid">
+  <section class="card">
+    <dl class="facts">
+      <dt>Employee</dt><dd>{{ expense.employee }}</dd>
+      <dt>Date</dt><dd>{{ expense.spent_on }}</dd>
+      <dt>Category</dt><dd>{{ expense.category }}</dd>
+      <dt>Receipt</dt>
+      <dd>{% if expense.receipt %}<a href="{{ url_for('expenses.view_receipt', file=expense.receipt) }}" target="_blank">View receipt</a>{% else %}<span class="muted">none</span>{% endif %}</dd>
+    </dl>
+    <h3>Business purpose</h3>
+    <div class="description">{{ expense.description|markdown or '—' }}</div>
+
+    {% if expense.status == 'draft' and expense.user_id == user.id %}
+      <h3>Finish this draft</h3>
+      <form method="post" action="{{ url_for('expenses.submit_draft', expense_id=expense.id) }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div class="row">
+          <label>Merchant <input name="merchant" value="{{ expense.merchant }}"></label>
+          <label>Amount (USD) <input name="amount" required inputmode="decimal" placeholder="0.00"></label>
+        </div>
+        <label>Category
+          <select name="category">{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></label>
+        <label>Business purpose <textarea name="description" rows="2"></textarea></label>
+        <button>Submit expense</button>
+      </form>
+    {% endif %}
+
+    {% if can_approve and expense.status in ('submitted', 'flagged') %}
+      <h3>Decision</h3>
+      <form method="post" action="{{ url_for('approvals.decide', expense_id=expense.id) }}" class="decision">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <input type="hidden" name="back" value="detail">
+        <input name="note" placeholder="Optional note to {{ expense.employee.split()[0] }}">
+        <button name="decision" value="approve">Approve</button>
+        <button name="decision" value="reject" class="secondary">Reject</button>
+        <a href="{{ url_for('approvals.reminder', expense_id=expense.id) }}">Ask for more detail</a>
+      </form>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Activity</h2>
+    {% for c in comments %}
+      <div class="comment">
+        <div class="muted small">{{ c.author or 'Policy engine' }} · {{ c.created_at }}</div>
+        {{ c.body|markdown }}
+      </div>
+    {% else %}
+      <p class="muted">No comments yet.</p>
+    {% endfor %}
+    <form method="post" action="{{ url_for('expenses.add_comment', expense_id=expense.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <textarea name="body" rows="3" placeholder="Add a comment"></textarea>
+      <button>Comment</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

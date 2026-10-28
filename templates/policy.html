@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Expense policy{% endblock %}
+{% block content %}
+<h1>Expense policy</h1>
+<p class="muted">Rules run every time an expense is submitted. The first rule that matches decides what happens.</p>
+
+<section class="card">
+  <table class="list">
+    <tr><th>#</th><th>Rule</th><th>When</th><th>Then</th><th></th></tr>
+    {% for r in rules %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ r.name }}</td>
+        <td><code>{{ r.condition }}</code></td>
+        <td><span class="status status-{{ actions[r.action] }}">{{ r.action }}</span></td>
+        <td>
+          <form method="post" action="{{ url_for('policy.delete_rule', rule_id=r.id) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <button class="link">delete</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+</section>
+
+<div class="grid">
+  <section class="card">
+    <h2>Add a rule</h2>
+    <form method="post" action="{{ url_for('policy.create_rule') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label>Name <input name="name" required placeholder="Flag weekend software purchases"></label>
+      <label>When <input name="condition" required class="code" placeholder='category == "Software" and amount > 500'></label>
+      <p class="muted small">You can use <code>amount</code>, <code>category</code>, <code>merchant</code>,
+        <code>description</code> and <code>has_receipt</code> with <code>and</code>, <code>or</code>,
+        <code>not</code>, <code>&lt;</code>, <code>&gt;</code>, <code>==</code>.</p>
+      <label>Then
+        <select name="action">{% for a in actions %}<option>{{ a }}</option>{% endfor %}</select></label>
+      <button>Add rule</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Try a rule</h2>
+    <form method="post" action="{{ url_for('policy.test_rule') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label>When <input name="condition" required class="code" placeholder='amount > 75 and not has_receipt'></label>
+      <div class="row">
+        <label>Amount <input name="amount" value="120"></label>
+        <label>Category <select name="category">{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></label>
+      </div>
+      <label>Merchant <input name="merchant" value="Uber"></label>
+      <label class="check"><input type="checkbox" name="has_receipt" value="1"> Has a receipt</label>
+      <button>Test</button>
+    </form>
+
+    <h2>Import a policy file</h2>
+    <p class="muted small">YAML exported from another Darts workspace.</p>
+    <form method="post" action="{{ url_for('policy.import_file') }}" enctype="multipart/form-data" class="inline">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <input type="file" name="policy_file" accept=".yaml,.yml" required>
+      <button>Import</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

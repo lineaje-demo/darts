@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Approvals{% endblock %}
+{% block content %}
+<h1>Waiting for you</h1>
+<section class="card">
+  {% if pending %}
+  <table class="list">
+    <tr><th>Date</th><th>Employee</th><th>Merchant</th><th>Category</th><th class="num">Amount</th><th>Status</th><th></th></tr>
+    {% for e in pending %}
+      <tr>
+        <td>{{ e.spent_on }}</td>
+        <td>{{ e.employee }}</td>
+        <td><a href="{{ url_for('expenses.detail', expense_id=e.id) }}">{{ e.merchant }}</a></td>
+        <td>{{ e.category }}</td>
+        <td class="num">{{ e.amount_cents|money }}</td>
+        <td><span class="status status-{{ e.status }}">{{ e.status }}</span></td>
+        <td class="actions">
+          {% if e.user_id != user.id %}
+          <form method="post" action="{{ url_for('approvals.decide', expense_id=e.id) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <button name="decision" value="approve">Approve</button>
+            <button name="decision" value="reject" class="secondary">Reject</button>
+          </form>
+          <a href="{{ url_for('approvals.reminder', expense_id=e.id) }}">Remind</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+    <p class="muted">Nothing to approve. 🎉</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+instance/
+data/
+
+# scanner output and local eval answer key (kept out of the scanned tree)
+findings/
+.groundtruth/

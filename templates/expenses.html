@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <h1>{% if user.role == 'employee' %}My expenses{% elif user.role == 'manager' %}Team expenses{% else %}All expenses{% endif %}</h1>
+  <a class="button" href="{{ url_for('expenses.new') }}">+ New expense</a>
+</div>
+
+<div class="stats">
+  <div class="stat"><span class="muted">Waiting for approval</span><strong>{{ totals.submitted|money }}</strong></div>
+  <div class="stat"><span class="muted">Flagged by policy</span><strong>{{ totals.flagged|money }}</strong></div>
+  <div class="stat"><span class="muted">Approved</span><strong>{{ totals.approved|money }}</strong></div>
+  <div class="stat"><span class="muted">Rejected</span><strong>{{ totals.rejected|money }}</strong></div>
+</div>
+
+<section class="card">
+  <form class="search" method="get">
+    <input type="search" name="q" value="{{ q }}" placeholder="Search by merchant or description">
+    <button>Search</button>
+    {% if q %}<a href="{{ url_for('expenses.index') }}">clear</a>{% endif %}
+  </form>
+
+  {% if expenses %}
+  <table class="list">
+    <tr><th>Date</th>{% if user.role != 'employee' %}<th>Employee</th>{% endif %}<th>Merchant</th><th>Category</th><th class="num">Amount</th><th>Status</th></tr>
+    {% for e in expenses %}
+      <tr>
+        <td>{{ e.spent_on }}</td>
+        {% if user.role != 'employee' %}<td>{{ e.employee }}</td>{% endif %}
+        <td><a href="{{ url_for('expenses.detail', expense_id=e.id) }}">{{ e.merchant }}</a></td>
+        <td>{{ e.category }}</td>
+        <td class="num">{{ e.amount_cents|money }}</td>
+        <td><span class="status status-{{ e.status }}">{{ e.status }}</span></td>
+      </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+    <p class="muted">No expenses found.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Back from a trip?</h2>
+  <p class="muted">Upload a .zip of receipt photos and we'll create a draft expense for each one.</p>
+  <form method="post" action="{{ url_for('expenses.bulk_upload') }}" enctype="multipart/form-data" class="inline">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="file" name="bundle" accept=".zip" required>
+    <button>Upload receipts</button>
+  </form>
+</section>
+{% endblock %}

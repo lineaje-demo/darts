@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<h1>Reports</h1>
+
+<div class="grid">
+  <section class="card">
+    <h2>Approved spend by category</h2>
+    <table class="list">
+      {% for row in by_category %}
+        <tr><td>{{ row.category }}</td><td class="muted">{{ row.n }} expense{{ 's' if row.n != 1 }}</td><td class="num">{{ row.total|money }}</td></tr>
+      {% endfor %}
+    </table>
+  </section>
+  <section class="card">
+    <h2>Approved spend by person</h2>
+    <table class="list">
+      {% for row in by_employee %}
+        <tr><td>{{ row.name }}</td><td class="muted">{{ row.n }} expense{{ 's' if row.n != 1 }}</td><td class="num">{{ row.total|money }}</td></tr>
+      {% endfor %}
+    </table>
+  </section>
+</div>
+
+<div class="grid">
+  <section class="card">
+    <h2>Export to Excel</h2>
+    <form method="get" action="{{ url_for('reports.export_csv') }}" class="inline">
+      <select name="status">
+        <option value="">All statuses</option>
+        {% for s in statuses %}<option>{{ s }}</option>{% endfor %}
+      </select>
+      <button>Download CSV</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Month-end pack</h2>
+    <p class="muted small">Approved expenses and their receipts for the auditors, as a .tar.gz.</p>
+    <form method="post" action="{{ url_for('reports.month_end_pack') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <div class="row">
+        <label>Month <input type="month" name="month" required></label>
+        <label>File name <input name="pack_name" placeholder="darts-expenses-2026-10"></label>
+      </div>
+      <button>Build pack</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

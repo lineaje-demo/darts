@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<div class="hero">
+  <h1>Welcome to Darts</h1>
+  <p class="muted">Submit expenses, approve your team's spend, and close the month. Pick who you want to be:</p>
+</div>
+<form method="post" class="personas">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  {% for u in users %}
+    <button name="user_id" value="{{ u.id }}" class="persona">
+      <span class="avatar">{{ u.name[0] }}</span>
+      <strong>{{ u.name }}</strong>
+      <span class="muted">{{ u.title }}</span>
+      <span class="badge badge-{{ u.role }}">{{ u.role }}</span>
+      <span class="muted small">
+        {% if u.role == 'employee' %}Submits expenses and receipts
+        {% elif u.role == 'manager' %}Approves the sales team's expenses
+        {% else %}Sets expense policy and runs reports{% endif %}
+      </span>
+    </button>
+  {% endfor %}
+</form>
+{% endblock %}

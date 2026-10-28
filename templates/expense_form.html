@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}New expense{% endblock %}
+{% block content %}
+<h1>New expense</h1>
+<section class="card narrow">
+  <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="row">
+      <label>Merchant <input name="merchant" required value="{{ form.merchant or '' }}" placeholder="e.g. Delta Air Lines"></label>
+      <label>Amount (USD) <input name="amount" required inputmode="decimal" value="{{ form.amount or '' }}" placeholder="0.00"></label>
+    </div>
+    <div class="row">
+      <label>Date <input type="date" name="spent_on" required value="{{ form.spent_on or today }}"></label>
+      <label>Category
+        <select name="category">
+          {% for c in categories %}<option {% if form.category == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>Business purpose <span class="muted">(who, what, why — **bold** and [links](https://…) allowed)</span>
+      <textarea name="description" rows="3">{{ form.description or '' }}</textarea></label>
+
+    <fieldset>
+      <legend>Receipt</legend>
+      <label>Upload a photo or PDF <input type="file" name="receipt" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.heic"></label>
+      <label>…or paste a link to an e-receipt <span class="muted">(Uber, Lyft, airline or hotel email link)</span>
+        <input type="url" name="receipt_url" value="{{ form.receipt_url or '' }}" placeholder="https://"></label>
+    </fieldset>
+
+    <button>Submit expense</button>
+  </form>
+</section>
+{% endblock %}

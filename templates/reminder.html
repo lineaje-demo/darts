@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Reminder{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('expenses.detail', expense_id=expense.id) }}">&larr; {{ expense.merchant }}</a></p>
+<h1>Ask {{ employee.name.split()[0] }} for more detail</h1>
+<section class="card narrow">
+  <dl class="facts">
+    <dt>To</dt><dd>{{ employee.name }} &lt;{{ employee.email }}&gt;</dd>
+    <dt>Subject</dt><dd>{{ subject }}</dd>
+  </dl>
+  <pre class="email">{{ body }}</pre>
+  <form method="post">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <button>Send reminder</button>
+  </form>
+</section>
+{% endblock %}
