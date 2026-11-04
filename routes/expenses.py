@@ -161,7 +161,10 @@ def add_comment(expense_id: int):
 @bp.get("/receipts")
 @login_required
 def view_receipt():
-    path = receipts.receipt_path(request.args.get("file", ""))
+    try:
+        path = receipts.receipt_path(request.args.get("file", ""))
+    except receipts.ReceiptError:
+        abort(404)
     if not os.path.isfile(path):
         abort(404)
     return send_file(path)

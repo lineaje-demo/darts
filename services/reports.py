@@ -2,6 +2,7 @@
 
 import csv
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -13,6 +14,19 @@ from services import receipts
 
 STATUSES = ("approved", "submitted", "flagged", "rejected", "draft")
 CSV_HEADER = ["id", "employee", "date", "merchant", "category", "amount", "status", "description"]
+
+# Spreadsheet clients evaluate a cell whose first (non-whitespace) character is
+# one of these as a formula.  Prefixing such text with a single quote forces
+# the cell to be imported as plain text.
+FORMULA_CHARS = ("=", "+", "-", "@")
+FORMULA_PAD = " \t\r\n"
+
+
+def csv_text_cell(value):
+    """Neutralize a text cell so spreadsheet imports cannot evaluate it as a formula."""
+    if isinstance(value, str) and value.lstrip(FORMULA_PAD)[:1] in FORMULA_CHARS:
+        return "'" + value
+    return value
 
 
 def fetch_expenses(status: str | None = None, month: str | None = None):
@@ -41,12 +55,16 @@ def write_csv(out, expenses) -> None:
     writer = csv.writer(out)
     writer.writerow(CSV_HEADER)
     for e in expenses:
-        writer.writerow([e["id"], e["employee"], e["spent_on"], e["merchant"], e["category"],
-                         f"{e['amount_cents'] / 100:.2f}", e["status"], e["description"]])
+        writer.writerow([csv_text_cell(cell) for cell in (
+            e["id"], e["employee"], e["spent_on"], e["merchant"], e["category"],
+            f"{e['amount_cents'] / 100:.2f}", e["status"], e["description"])])
 
 
 def build_month_end_pack(month: str, pack_name: str) -> str:
     """Bundle the month's approved expenses (CSV + receipts) into ``<pack_name>.tar.gz``."""
+    archive = f"{pack_name}.tar.gz"
+    if os.path.basename(archive) != archive:
+        raise ValueError("pack_name must be a plain file name")
     reports_dir = current_app.config["REPORTS_DIR"]
     workdir = tempfile.mkdtemp(dir=reports_dir)
     try:
@@ -58,8 +76,8 @@ def build_month_end_pack(month: str, pack_name: str) -> str:
             if e["receipt"] and os.path.isfile(receipts.receipt_path(e["receipt"])):
                 shutil.copy(receipts.receipt_path(e["receipt"]), os.path.join(workdir, "receipts"))
 
-        archive = f"{pack_name}.tar.gz"
-        subprocess.run(f"tar -czf {os.path.join(reports_dir, archive)} -C {workdir} .", shell=True, check=True)
+        archive_path = os.path.join(reports_dir, archive)
+        subprocess.run(["tar", "-czf", archive_path, "-C", workdir, "."], check=True)
         return archive
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
