@@ -11,6 +11,10 @@ bp = Blueprint("approvals", __name__)
 
 DECISIONS = {"approve": "approved", "reject": "rejected"}
 
+# Only expenses awaiting a decision may be decided; drafts and finalized
+# (approved/rejected) expenses have no valid decision transition.
+DECIDABLE_STATUSES = ("submitted", "flagged")
+
 
 @bp.get("/approvals")
 @role_required("manager", "finance")
@@ -28,7 +32,11 @@ def index():
 def decide(expense_id: int):
     expense = get_expense_or_404(expense_id)
     decision = request.form.get("decision")
-    if not can_approve(g.user, expense) or decision not in DECISIONS:
+    if (
+        not can_approve(g.user, expense)
+        or decision not in DECISIONS
+        or expense["status"] not in DECIDABLE_STATUSES
+    ):
         abort(403)
 
     db = get_db()
