@@ -8,7 +8,8 @@ from flask import Blueprint, abort, flash, g, redirect, render_template, request
 from lib.auth import login_required
 from lib.db import CATEGORIES, get_db, now, parse_amount
 from services import policy, receipts
-from services.access import EXPENSE_QUERY, can_approve, get_expense_or_404, visible_to
+from services.access import (EXPENSE_QUERY, can_approve, get_expense_by_receipt_or_404,
+                         get_expense_or_404, visible_to)
 
 bp = Blueprint("expenses", __name__)
 
@@ -20,7 +21,8 @@ def index():
     where, params = visible_to(g.user)
     sql = f"{EXPENSE_QUERY} WHERE {where}"
     if q:
-        sql += f" AND (e.merchant LIKE '%{q}%' OR e.description LIKE '%{q}%')"
+        sql += " AND (e.merchant LIKE ? OR e.description LIKE ?)"
+        params = params + [f"%{q}%", f"%{q}%"]
     sql += " ORDER BY e.spent_on DESC, e.id DESC"
     expenses = get_db().execute(sql, params).fetchall()
 
@@ -164,4 +166,4 @@ def view_receipt():
     path = receipts.receipt_path(request.args.get("file", ""))
     if not os.path.isfile(path):
         abort(404)
-    return send_file(path)
+    return send_file(path, as_attachment=True)
