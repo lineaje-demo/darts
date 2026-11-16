@@ -2,6 +2,7 @@
 
 import csv
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -13,6 +14,18 @@ from services import receipts
 
 STATUSES = ("approved", "submitted", "flagged", "rejected", "draft")
 CSV_HEADER = ["id", "employee", "date", "merchant", "category", "amount", "status", "description"]
+# Cells whose text starts with one of these characters are interpreted as formulas by
+# spreadsheet applications; neutralize them when exporting (OWASP CSV injection guidance).
+FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value):
+    """Prefix a quote on cells a spreadsheet would treat as a formula."""
+    if isinstance(value, str) and (
+        value[:1] in FORMULA_TRIGGERS or value.lstrip().startswith(FORMULA_TRIGGERS)
+    ):
+        return "'" + value
+    return value
 
 
 def fetch_expenses(status: str | None = None, month: str | None = None):
@@ -41,12 +54,15 @@ def write_csv(out, expenses) -> None:
     writer = csv.writer(out)
     writer.writerow(CSV_HEADER)
     for e in expenses:
-        writer.writerow([e["id"], e["employee"], e["spent_on"], e["merchant"], e["category"],
-                         f"{e['amount_cents'] / 100:.2f}", e["status"], e["description"]])
+        row = [e["id"], e["employee"], e["spent_on"], e["merchant"], e["category"],
+               f"{e['amount_cents'] / 100:.2f}", e["status"], e["description"]]
+        writer.writerow([_csv_safe(value) for value in row])
 
 
 def build_month_end_pack(month: str, pack_name: str) -> str:
     """Bundle the month's approved expenses (CSV + receipts) into ``<pack_name>.tar.gz``."""
+    if not PACK_NAME.fullmatch(pack_name):
+        raise ValueError(f"invalid pack name: {pack_name!r}")
     reports_dir = current_app.config["REPORTS_DIR"]
     workdir = tempfile.mkdtemp(dir=reports_dir)
     try:
@@ -59,7 +75,7 @@ def build_month_end_pack(month: str, pack_name: str) -> str:
                 shutil.copy(receipts.receipt_path(e["receipt"]), os.path.join(workdir, "receipts"))
 
         archive = f"{pack_name}.tar.gz"
-        subprocess.run(f"tar -czf {os.path.join(reports_dir, archive)} -C {workdir} .", shell=True, check=True)
+        subprocess.run(["tar", "-czf", os.path.join(reports_dir, archive), "-C", workdir, "."], check=True)
         return archive
     finally:
         shutil.rmtree(workdir, ignore_errors=True)

@@ -9,13 +9,18 @@ import secrets
 
 import yaml
 
-SETTINGS_KEYS = ("DATA_DIR", "MAX_CONTENT_LENGTH")
+SETTINGS_KEYS = ("DATA_DIR", "MAX_CONTENT_LENGTH", "PERSONA_LOGIN")
+
+_TRUE_VALUES = {"1", "true", "yes", "on"}
 
 
 def load_config(instance_path: str) -> dict:
     settings: dict = {
         "DATA_DIR": instance_path,
         "MAX_CONTENT_LENGTH": 20 * 1024 * 1024,
+        # The persona picker signs in without verifying any credential, so it
+        # stays disabled unless the operator explicitly opts in (demo mode).
+        "PERSONA_LOGIN": False,
     }
 
     settings_file = os.environ.get("DARTS_SETTINGS")
@@ -27,6 +32,9 @@ def load_config(instance_path: str) -> dict:
     if os.environ.get("DARTS_DATA_DIR"):
         settings["DATA_DIR"] = os.environ["DARTS_DATA_DIR"]
 
+    if os.environ.get("DARTS_PERSONA_LOGIN"):
+        settings["PERSONA_LOGIN"] = os.environ["DARTS_PERSONA_LOGIN"].strip().lower() in _TRUE_VALUES
+
     data_dir = settings["DATA_DIR"]
     return {
         **settings,
@@ -36,4 +44,5 @@ def load_config(instance_path: str) -> dict:
         "REPORTS_DIR": os.path.join(data_dir, "reports"),
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
+        "SESSION_COOKIE_SECURE": True,
     }
