@@ -41,6 +41,11 @@ CREATE TABLE IF NOT EXISTS rules (
     condition  TEXT NOT NULL,
     action     TEXT NOT NULL                -- approve | flag | reject
 );
+CREATE TABLE IF NOT EXISTS sessions (
+    sid         TEXT PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    created_at  TEXT NOT NULL
+);
 """
 
 CATEGORIES = ("Travel", "Lodging", "Meals", "Transport", "Office", "Software", "Other")
@@ -116,6 +121,8 @@ def parse_amount(text: str) -> int:
         value = Decimal(text.replace(",", "").replace("$", "").strip())
     except InvalidOperation:
         raise ValueError("Enter the amount as a number, e.g. 42.50") from None
+    if not value.is_finite():
+        raise ValueError("Enter the amount as a number, e.g. 42.50")
     if value <= 0 or value > 100000:
         raise ValueError("Amount must be between $0.01 and $100,000")
     return int(value.quantize(Decimal("0.01")) * 100)

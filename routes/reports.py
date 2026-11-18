@@ -46,7 +46,7 @@ def month_end_pack():
 
     try:
         archive = build_month_end_pack(month, pack_name)
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, ValueError):
         flash("Could not build the month-end pack.", "error")
         return redirect(url_for("reports.index"))
     return send_from_directory(current_app.config["REPORTS_DIR"], archive, as_attachment=True)

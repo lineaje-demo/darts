@@ -8,7 +8,7 @@ from flask import Blueprint, abort, flash, g, redirect, render_template, request
 from lib.auth import login_required
 from lib.db import CATEGORIES, get_db, now, parse_amount
 from services import policy, receipts
-from services.access import EXPENSE_QUERY, can_approve, get_expense_or_404, visible_to
+from services.access import EXPENSE_QUERY, can_approve, can_view, get_expense_or_404, visible_to
 
 bp = Blueprint("expenses", __name__)
 
@@ -20,7 +20,9 @@ def index():
     where, params = visible_to(g.user)
     sql = f"{EXPENSE_QUERY} WHERE {where}"
     if q:
-        sql += f" AND (e.merchant LIKE '%{q}%' OR e.description LIKE '%{q}%')"
+        like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        sql += " AND (e.merchant LIKE ? ESCAPE '\\' OR e.description LIKE ? ESCAPE '\\')"
+        params.extend([like, like])
     sql += " ORDER BY e.spent_on DESC, e.id DESC"
     expenses = get_db().execute(sql, params).fetchall()
 
@@ -161,7 +163,10 @@ def add_comment(expense_id: int):
 @bp.get("/receipts")
 @login_required
 def view_receipt():
-    path = receipts.receipt_path(request.args.get("file", ""))
+    name = request.args.get("file", "")
+    if os.path.splitext(name)[1].lower() not in receipts.ALLOWED_EXTENSIONS:
+        abort(404)
+    path = receipts.receipt_path(name)
     if not os.path.isfile(path):
         abort(404)
     return send_file(path)

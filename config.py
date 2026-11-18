@@ -21,8 +21,9 @@ def load_config(instance_path: str) -> dict:
     settings_file = os.environ.get("DARTS_SETTINGS")
     if settings_file and os.path.exists(settings_file):
         with open(settings_file, encoding="utf-8") as fh:
-            overrides = yaml.safe_load(fh) or {}
-        settings.update({k: v for k, v in overrides.items() if k in SETTINGS_KEYS})
+            overrides = yaml.safe_load(fh)
+        if isinstance(overrides, dict):
+            settings.update({k: v for k, v in overrides.items() if k in SETTINGS_KEYS})
 
     if os.environ.get("DARTS_DATA_DIR"):
         settings["DATA_DIR"] = os.environ["DARTS_DATA_DIR"]
@@ -36,4 +37,7 @@ def load_config(instance_path: str) -> dict:
         "REPORTS_DIR": os.path.join(data_dir, "reports"),
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
+        # Insecure demo sign-in (pick a persona, no credential). Off unless
+        # explicitly enabled for local demos with DARTS_DEMO_AUTH=1.
+        "DEMO_AUTH": os.environ.get("DARTS_DEMO_AUTH", "").lower() in ("1", "true", "yes", "on"),
     }
