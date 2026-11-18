@@ -16,7 +16,8 @@ python3 -m venv .venv
 .venv/bin/python app.py
 ```
 
-Open http://127.0.0.1:8080 and pick a persona:
+Open http://127.0.0.1:8080 and pick a persona. Every seeded persona signs in with the
+demo password `darts-demo`:
 
 | Persona | Role | Try |
 |---------|------|-----|
