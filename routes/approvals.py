@@ -10,6 +10,10 @@ from services.notify import build_reminder
 bp = Blueprint("approvals", __name__)
 
 DECISIONS = {"approve": "approved", "reject": "rejected"}
+# Statuses on which an approval decision may be taken (mirrors the queue and
+# the decision form in expense_detail.html); anything else is already final
+# or not yet submitted.
+ACTIONABLE = ("submitted", "flagged")
 
 
 @bp.get("/approvals")
@@ -28,7 +32,11 @@ def index():
 def decide(expense_id: int):
     expense = get_expense_or_404(expense_id)
     decision = request.form.get("decision")
-    if not can_approve(g.user, expense) or decision not in DECISIONS:
+    if (
+        not can_approve(g.user, expense)
+        or decision not in DECISIONS
+        or expense["status"] not in ACTIONABLE
+    ):
         abort(403)
 
     db = get_db()

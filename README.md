@@ -16,7 +16,8 @@ python3 -m venv .venv
 .venv/bin/python app.py
 ```
 
-Open http://127.0.0.1:8080 and pick a persona:
+Open http://127.0.0.1:8080 and pick a persona (the credential-less demo
+sign-in must be enabled first: start the app with `DARTS_DEMO_AUTH=1`):
 
 | Persona | Role | Try |
 |---------|------|-----|
@@ -54,3 +55,4 @@ static/         CSS
 | `DARTS_SECRET_KEY` | random per process | Session signing key |
 | `DARTS_SETTINGS`   | unset | Optional YAML settings file |
 | `DARTS_HOST` / `DARTS_PORT` | `127.0.0.1` / `8080` | Bind address |
+| `DARTS_DEMO_AUTH`  | unset (disabled) | Set to `1` to enable the insecure demo persona sign-in |
