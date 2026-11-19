@@ -37,17 +37,40 @@ def approved_totals(group_by: str):
     return get_db().execute(queries[group_by]).fetchall()
 
 
+# Characters spreadsheet applications treat as the start of a formula when a
+# cell begins with one of them (Excel, LibreOffice and Google Sheets also
+# honour the tab/CR smuggling prefixes).
+FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def csv_safe(value) -> str:
+    """Render one CSV cell, neutralizing spreadsheet formula interpretation.
+
+    Cells whose text begins with a formula-trigger character are prefixed
+    with a single quote so spreadsheet applications display them as text.
+    """
+    text = "" if value is None else str(value)
+    if text.startswith(FORMULA_PREFIXES):
+        return "'" + text
+    return text
+
+
 def write_csv(out, expenses) -> None:
     writer = csv.writer(out)
     writer.writerow(CSV_HEADER)
     for e in expenses:
-        writer.writerow([e["id"], e["employee"], e["spent_on"], e["merchant"], e["category"],
-                         f"{e['amount_cents'] / 100:.2f}", e["status"], e["description"]])
+        writer.writerow([csv_safe(cell) for cell in (
+            e["id"], e["employee"], e["spent_on"], e["merchant"], e["category"],
+            f"{e['amount_cents'] / 100:.2f}", e["status"], e["description"])])
 
 
 def build_month_end_pack(month: str, pack_name: str) -> str:
     """Bundle the month's approved expenses (CSV + receipts) into ``<pack_name>.tar.gz``."""
-    reports_dir = current_app.config["REPORTS_DIR"]
+    reports_dir = os.path.realpath(current_app.config["REPORTS_DIR"])
+    archive = f"{pack_name}.tar.gz"
+    archive_path = os.path.realpath(os.path.join(reports_dir, archive))
+    if os.path.commonpath((reports_dir, archive_path)) != reports_dir:
+        raise ValueError(f"Invalid pack name: {pack_name!r}")
     workdir = tempfile.mkdtemp(dir=reports_dir)
     try:
         expenses = fetch_expenses("approved", month)
@@ -55,8 +78,14 @@ def build_month_end_pack(month: str, pack_name: str) -> str:
             write_csv(fh, expenses)
         os.makedirs(os.path.join(workdir, "receipts"))
         for e in expenses:
-            if e["receipt"] and os.path.isfile(receipts.receipt_path(e["receipt"])):
-                shutil.copy(receipts.receipt_path(e["receipt"]), os.path.join(workdir, "receipts"))
+            if not e["receipt"]:
+                continue
+            try:
+                src = receipts.receipt_path(e["receipt"])
+            except receipts.ReceiptError:
+                continue
+            if os.path.isfile(src):
+                shutil.copy(src, os.path.join(workdir, "receipts"))
 
         archive = f"{pack_name}.tar.gz"
         subprocess.run(f"tar -czf {os.path.join(reports_dir, archive)} -C {workdir} .", shell=True, check=True)

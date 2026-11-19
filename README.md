@@ -16,14 +16,15 @@ python3 -m venv .venv
 .venv/bin/python app.py
 ```
 
-Open http://127.0.0.1:8080 and pick a persona:
+Open http://127.0.0.1:8080, enter the persona's demo password and pick a
+persona:
 
-| Persona | Role | Try |
-|---------|------|-----|
-| Alice Chen | Employee | Submit an expense, search, upload a zip of receipts |
-| Bob Rivera | Manager | Approvals, "Ask for more detail" |
-| Carol Diaz | Finance | Policy rules, Reports, CSV export, month-end pack |
-| Dan Okafor | Employee | Has a flagged travel expense |
+| Persona | Role | Demo password | Try |
+|---------|------|---------------|-----|
+| Alice Chen | Employee | `alice-demo-2024` | Submit an expense, search, upload a zip of receipts |
+| Bob Rivera | Manager | `bob-demo-2024` | Approvals, "Ask for more detail" |
+| Carol Diaz | Finance | `carol-demo-2024` | Policy rules, Reports, CSV export, month-end pack |
+| Dan Okafor | Employee | `dan-demo-2024` | Has a flagged travel expense |
 
 The app starts with demo data. Delete the `instance/` folder to reset it.
 

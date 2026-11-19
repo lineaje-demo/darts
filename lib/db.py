@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from flask import current_app, g
+from werkzeug.security import generate_password_hash
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -14,7 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
     email       TEXT NOT NULL UNIQUE,
     role        TEXT NOT NULL,            -- employee | manager | finance
     title       TEXT NOT NULL DEFAULT '',
-    manager_id  INTEGER REFERENCES users(id)
+    manager_id  INTEGER REFERENCES users(id),
+    password_hash TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS expenses (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,11 +47,12 @@ CREATE TABLE IF NOT EXISTS rules (
 
 CATEGORIES = ("Travel", "Lodging", "Meals", "Transport", "Office", "Software", "Other")
 
+# id, name, email, role, title, manager_id, demo password (documented in README.md)
 USERS = [
-    (1, "Alice Chen", "alice@darts.test", "employee", "Account Executive", 2),
-    (2, "Bob Rivera", "bob@darts.test", "manager", "Sales Director", None),
-    (3, "Carol Diaz", "carol@darts.test", "finance", "Finance Controller", None),
-    (4, "Dan Okafor", "dan@darts.test", "employee", "Solutions Engineer", 2),
+    (1, "Alice Chen", "alice@darts.test", "employee", "Account Executive", 2, "alice-demo-2024"),
+    (2, "Bob Rivera", "bob@darts.test", "manager", "Sales Director", None, "bob-demo-2024"),
+    (3, "Carol Diaz", "carol@darts.test", "finance", "Finance Controller", None, "carol-demo-2024"),
+    (4, "Dan Okafor", "dan@darts.test", "employee", "Solutions Engineer", 2, "dan-demo-2024"),
 ]
 
 # user_id, merchant, category, amount_cents, days_ago, description, status
@@ -91,13 +94,18 @@ def close_db(exc=None) -> None:
 def init_db(path: str) -> None:
     with closing(sqlite3.connect(path)) as conn, conn:
         conn.executescript(SCHEMA)
+        user_cols = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
+        if "password_hash" not in user_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''")
         if conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
             _seed(conn)
 
 
 def _seed(conn: sqlite3.Connection) -> None:
     conn.executemany(
-        "INSERT INTO users (id, name, email, role, title, manager_id) VALUES (?, ?, ?, ?, ?, ?)", USERS
+        "INSERT INTO users (id, name, email, role, title, manager_id, password_hash)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [row[:-1] + (generate_password_hash(row[-1]),) for row in USERS],
     )
     today = date.today()
     for user_id, merchant, category, cents, days_ago, description, status in EXPENSES:
