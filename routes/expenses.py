@@ -20,7 +20,8 @@ def index():
     where, params = visible_to(g.user)
     sql = f"{EXPENSE_QUERY} WHERE {where}"
     if q:
-        sql += f" AND (e.merchant LIKE '%{q}%' OR e.description LIKE '%{q}%')"
+        sql += " AND (e.merchant LIKE ? OR e.description LIKE ?)"
+        params.extend([f"%{q}%", f"%{q}%"])
     sql += " ORDER BY e.spent_on DESC, e.id DESC"
     expenses = get_db().execute(sql, params).fetchall()
 
@@ -161,7 +162,15 @@ def add_comment(expense_id: int):
 @bp.get("/receipts")
 @login_required
 def view_receipt():
-    path = receipts.receipt_path(request.args.get("file", ""))
+    try:
+        path = receipts.receipt_path(request.args.get("file", ""))
+    except receipts.ReceiptError:
+        abort(404)
     if not os.path.isfile(path):
         abort(404)
-    return send_file(path)
+    mimetype = receipts.INLINE_MIMETYPES.get(os.path.splitext(path)[1].lower())
+    if mimetype is None:
+        # Stored files are user-controlled bytes: never render them inline in
+        # this origin (stored XSS), offer them as a plain download instead.
+        return send_file(path, mimetype="application/octet-stream", as_attachment=True)
+    return send_file(path, mimetype=mimetype)
