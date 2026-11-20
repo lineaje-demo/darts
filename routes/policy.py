@@ -1,9 +1,10 @@
 """Finance's expense policy page."""
 
+import yaml
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from lib.auth import role_required
-from lib.db import CATEGORIES, get_db
+from lib.db import CATEGORIES, get_db, parse_amount
 from services.policy import ACTIONS, add_rule, evaluate, import_rules, rule_context
 
 bp = Blueprint("policy", __name__)
@@ -42,8 +43,12 @@ def delete_rule(rule_id: int):
 @bp.post("/policy/test")
 @role_required("finance")
 def test_rule():
+    try:
+        amount_cents = int(float(request.form.get("amount") or 0) * 100)
+    except (ValueError, OverflowError):
+        amount_cents = 0
     sample = {
-        "amount_cents": int(float(request.form.get("amount") or 0) * 100),
+        "amount_cents": amount_cents,
         "category": request.form.get("category", "Other"),
         "merchant": request.form.get("merchant", ""),
         "description": "",
@@ -67,7 +72,7 @@ def import_file():
         return redirect(url_for("policy.index"))
     try:
         count = import_rules(upload.stream)
-    except (KeyError, TypeError, SyntaxError, ValueError) as exc:
+    except (KeyError, TypeError, SyntaxError, ValueError, yaml.YAMLError) as exc:
         get_db().rollback()
         flash(f"Import failed: {exc}", "error")
         return redirect(url_for("policy.index"))
