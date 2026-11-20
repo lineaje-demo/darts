@@ -4,7 +4,9 @@ import io
 import re
 import subprocess
 
-from flask import Blueprint, Response, current_app, flash, redirect, render_template, request, send_from_directory, url_for
+from flask import Blueprint, Response, flash, redirect, render_template, request, send_file, url_for
+
+from werkzeug.utils import secure_filename
 
 from lib.auth import role_required
 from services.reports import STATUSES, approved_totals, build_month_end_pack, fetch_expenses, write_csv
@@ -12,6 +14,7 @@ from services.reports import STATUSES, approved_totals, build_month_end_pack, fe
 bp = Blueprint("reports", __name__)
 
 MONTH = re.compile(r"^\d{4}-\d{2}$")
+PACK_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 @bp.get("/reports")
@@ -29,9 +32,8 @@ def index():
 @role_required("finance")
 def export_csv():
     status = request.args.get("status")
-    out = io.StringIO()
-    write_csv(out, fetch_expenses(status if status in STATUSES else None))
-    return Response(out.getvalue(), mimetype="text/csv",
+    body = stream_with_context(stream_csv(status if status in STATUSES else None))
+    return Response(body, mimetype="text/csv",
                     headers={"Content-Disposition": "attachment; filename=expenses.csv"})
 
 
@@ -42,11 +44,12 @@ def month_end_pack():
     if not MONTH.match(month):
         flash("Pick a month.", "error")
         return redirect(url_for("reports.index"))
-    pack_name = request.form.get("pack_name", "").strip() or f"darts-expenses-{month}"
+    pack_name = secure_filename(request.form.get("pack_name", "").strip()) or f"darts-expenses-{month}"
 
     try:
-        archive = build_month_end_pack(month, pack_name)
+        archive_name, data = build_month_end_pack(month, pack_name)
     except subprocess.CalledProcessError:
         flash("Could not build the month-end pack.", "error")
         return redirect(url_for("reports.index"))
-    return send_from_directory(current_app.config["REPORTS_DIR"], archive, as_attachment=True)
+    return send_file(io.BytesIO(data), mimetype="application/gzip",
+                     as_attachment=True, download_name=archive_name)

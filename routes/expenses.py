@@ -20,7 +20,8 @@ def index():
     where, params = visible_to(g.user)
     sql = f"{EXPENSE_QUERY} WHERE {where}"
     if q:
-        sql += f" AND (e.merchant LIKE '%{q}%' OR e.description LIKE '%{q}%')"
+        sql += " AND (e.merchant LIKE ? OR e.description LIKE ?)"
+        params = params + [f"%{q}%", f"%{q}%"]
     sql += " ORDER BY e.spent_on DESC, e.id DESC"
     expenses = get_db().execute(sql, params).fetchall()
 
@@ -164,4 +165,10 @@ def view_receipt():
     path = receipts.receipt_path(request.args.get("file", ""))
     if not os.path.isfile(path):
         abort(404)
-    return send_file(path)
+    # Only serve known receipt formats, and never let the browser sniff the
+    # bytes into an active content type such as text/html.
+    if os.path.splitext(path)[1].lower() not in receipts.ALLOWED_EXTENSIONS:
+        abort(404)
+    response = send_file(path)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
