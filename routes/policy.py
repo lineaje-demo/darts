@@ -1,5 +1,7 @@
 """Finance's expense policy page."""
 
+import yaml
+
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from lib.auth import role_required
@@ -67,7 +69,7 @@ def import_file():
         return redirect(url_for("policy.index"))
     try:
         count = import_rules(upload.stream)
-    except (KeyError, TypeError, SyntaxError, ValueError) as exc:
+    except (KeyError, TypeError, SyntaxError, ValueError, yaml.YAMLError) as exc:
         get_db().rollback()
         flash(f"Import failed: {exc}", "error")
         return redirect(url_for("policy.index"))

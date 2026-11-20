@@ -9,7 +9,7 @@ on {{ expense.spent_on }} needs more detail before {{ sender.name }} can approve
 
 You wrote:
 
-    [[DESCRIPTION]]
+    {{ description }}
 
 Please add an itemised receipt and the business purpose in Darts.
 
@@ -22,7 +22,9 @@ Thanks,
 def build_reminder(expense, employee, sender) -> tuple[str, str]:
     subject = f"Action needed: your {expense['merchant']} expense"
     # Quote the employee's own words, indented to match the email layout.
+    # The description is passed as template *data*, never spliced into the
+    # template source, so {{ }}/{% %} in it render verbatim.
     quoted = "\n    ".join((expense["description"] or "(no description)").splitlines())
-    source = REMINDER_TEMPLATE.replace("[[DESCRIPTION]]", quoted)
-    body = render_template_string(source, expense=expense, employee=employee, sender=sender)
+    body = render_template_string(REMINDER_TEMPLATE, description=quoted,
+                                  expense=expense, employee=employee, sender=sender)
     return subject, body
