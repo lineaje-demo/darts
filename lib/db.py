@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from flask import current_app, g
+from werkzeug.security import generate_password_hash
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -14,7 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
     email       TEXT NOT NULL UNIQUE,
     role        TEXT NOT NULL,            -- employee | manager | finance
     title       TEXT NOT NULL DEFAULT '',
-    manager_id  INTEGER REFERENCES users(id)
+    manager_id  INTEGER REFERENCES users(id),
+    password_hash TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS expenses (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,15 +43,21 @@ CREATE TABLE IF NOT EXISTS rules (
     condition  TEXT NOT NULL,
     action     TEXT NOT NULL                -- approve | flag | reject
 );
+CREATE TABLE IF NOT EXISTS sessions (
+    token       TEXT PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    created_at  TEXT NOT NULL
+);
 """
 
 CATEGORIES = ("Travel", "Lodging", "Meals", "Transport", "Office", "Software", "Other")
 
+# id, name, email, role, title, manager_id, demo password (hashed at seed time)
 USERS = [
-    (1, "Alice Chen", "alice@darts.test", "employee", "Account Executive", 2),
-    (2, "Bob Rivera", "bob@darts.test", "manager", "Sales Director", None),
-    (3, "Carol Diaz", "carol@darts.test", "finance", "Finance Controller", None),
-    (4, "Dan Okafor", "dan@darts.test", "employee", "Solutions Engineer", 2),
+    (1, "Alice Chen", "alice@darts.test", "employee", "Account Executive", 2, "alice-demo"),
+    (2, "Bob Rivera", "bob@darts.test", "manager", "Sales Director", None, "bob-demo"),
+    (3, "Carol Diaz", "carol@darts.test", "finance", "Finance Controller", None, "carol-demo"),
+    (4, "Dan Okafor", "dan@darts.test", "employee", "Solutions Engineer", 2, "dan-demo"),
 ]
 
 # user_id, merchant, category, amount_cents, days_ago, description, status
@@ -91,13 +99,25 @@ def close_db(exc=None) -> None:
 def init_db(path: str) -> None:
     with closing(sqlite3.connect(path)) as conn, conn:
         conn.executescript(SCHEMA)
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
+        if "password_hash" not in columns:
+            # Databases created before sign-in required a password: add the
+            # column and backfill the demo personas' password hashes. Any
+            # other row keeps the empty hash, which can never verify.
+            conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''")
+            conn.executemany(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                [(generate_password_hash(u[6]), u[0]) for u in USERS],
+            )
         if conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
             _seed(conn)
 
 
 def _seed(conn: sqlite3.Connection) -> None:
     conn.executemany(
-        "INSERT INTO users (id, name, email, role, title, manager_id) VALUES (?, ?, ?, ?, ?, ?)", USERS
+        "INSERT INTO users (id, name, email, role, title, manager_id, password_hash)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [(*u[:6], generate_password_hash(u[6])) for u in USERS],
     )
     today = date.today()
     for user_id, merchant, category, cents, days_ago, description, status in EXPENSES:
@@ -116,6 +136,8 @@ def parse_amount(text: str) -> int:
         value = Decimal(text.replace(",", "").replace("$", "").strip())
     except InvalidOperation:
         raise ValueError("Enter the amount as a number, e.g. 42.50") from None
+    if not value.is_finite():
+        raise ValueError("Amount must be between $0.01 and $100,000")
     if value <= 0 or value > 100000:
         raise ValueError("Amount must be between $0.01 and $100,000")
     return int(value.quantize(Decimal("0.01")) * 100)

@@ -30,7 +30,16 @@ def can_view(user, expense) -> bool:
 def can_approve(user, expense) -> bool:
     if expense["user_id"] == user["id"]:
         return False
-    return user["role"] == "finance" or (user["role"] == "manager" and expense["manager_id"] == user["id"])
+    if user["role"] == "finance":
+        # Finance's queue (see approvals.index): anything still awaiting a decision.
+        return expense["status"] in ("submitted", "flagged")
+    # Managers act only on their reports' submitted expenses (see approvals.index);
+    # flagged expenses are finance's queue, decided expenses are final.
+    return (
+        user["role"] == "manager"
+        and expense["manager_id"] == user["id"]
+        and expense["status"] == "submitted"
+    )
 
 
 def get_expense_or_404(expense_id: int):

@@ -3,10 +3,13 @@
 {% block content %}
 <div class="hero">
   <h1>Welcome to Darts</h1>
-  <p class="muted">Submit expenses, approve your team's spend, and close the month. Pick who you want to be:</p>
+  <p class="muted">Submit expenses, approve your team's spend, and close the month. Pick who you want to be and enter that persona's demo password:</p>
 </div>
 <form method="post" class="personas">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <p>
+    <label>Demo password <input type="password" name="password" autocomplete="off" required></label>
+  </p>
   {% for u in users %}
     <button name="user_id" value="{{ u.id }}" class="persona">
       <span class="avatar">{{ u.name[0] }}</span>

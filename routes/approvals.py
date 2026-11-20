@@ -11,6 +11,12 @@ bp = Blueprint("approvals", __name__)
 
 DECISIONS = {"approve": "approved", "reject": "rejected"}
 
+# Statuses each role may decide, matching the queue partition in index():
+# managers act on submitted expenses from their reports; finance also takes
+# policy-flagged ones. Draft and terminal (approved/rejected) expenses are
+# not decidable.
+DECIDABLE = {"manager": ("submitted",), "finance": ("submitted", "flagged")}
+
 
 @bp.get("/approvals")
 @role_required("manager", "finance")
@@ -28,7 +34,11 @@ def index():
 def decide(expense_id: int):
     expense = get_expense_or_404(expense_id)
     decision = request.form.get("decision")
-    if not can_approve(g.user, expense) or decision not in DECISIONS:
+    if (
+        not can_approve(g.user, expense)
+        or decision not in DECISIONS
+        or expense["status"] not in DECIDABLE[g.user["role"]]
+    ):
         abort(403)
 
     db = get_db()
