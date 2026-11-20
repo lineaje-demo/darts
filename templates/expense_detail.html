@@ -17,7 +17,7 @@
       <dd>{% if expense.receipt %}<a href="{{ url_for('expenses.view_receipt', file=expense.receipt) }}" target="_blank">View receipt</a>{% else %}<span class="muted">none</span>{% endif %}</dd>
     </dl>
     <h3>Business purpose</h3>
-    <div class="description">{{ expense.description|markdown or '—' }}</div>
+    <div class="description">{{ expense.description|e|markdown or '—' }}</div>
 
     {% if expense.status == 'draft' and expense.user_id == user.id %}
       <h3>Finish this draft</h3>
@@ -52,7 +52,7 @@
     {% for c in comments %}
       <div class="comment">
         <div class="muted small">{{ c.author or 'Policy engine' }} · {{ c.created_at }}</div>
-        {{ c.body|markdown }}
+        {{ c.body|e|markdown }}
       </div>
     {% else %}
       <p class="muted">No comments yet.</p>
