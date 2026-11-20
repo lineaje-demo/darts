@@ -54,7 +54,10 @@ def add_rule(name: str, condition: str, action: str) -> None:
 
 def import_rules(stream) -> int:
     """Load rules from a YAML policy file exported by another workspace."""
-    document = yaml.load(stream, Loader=yaml.Loader) or {}
+    try:
+        document = yaml.safe_load(stream) or {}
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Invalid policy file: {exc}") from exc
     rules = document.get("rules", []) if isinstance(document, dict) else []
     for rule in rules:
         add_rule(str(rule["name"]), str(rule["condition"]), str(rule["action"]))
