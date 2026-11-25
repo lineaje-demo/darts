@@ -11,6 +11,8 @@ import yaml
 
 SETTINGS_KEYS = ("DATA_DIR", "MAX_CONTENT_LENGTH")
 
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+
 
 def load_config(instance_path: str) -> dict:
     settings: dict = {
@@ -34,6 +36,7 @@ def load_config(instance_path: str) -> dict:
         "DATABASE": os.path.join(data_dir, "expenses.db"),
         "RECEIPTS_DIR": os.path.join(data_dir, "receipts"),
         "REPORTS_DIR": os.path.join(data_dir, "reports"),
+        "SESSION_COOKIE_SECURE": True,
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
     }

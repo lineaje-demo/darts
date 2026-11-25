@@ -2,7 +2,6 @@
 
 import os
 import posixpath
-import shutil
 import urllib.parse
 import urllib.request
 import uuid
@@ -13,10 +12,25 @@ from werkzeug.utils import secure_filename
 
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic"}
 MAX_RECEIPT_BYTES = 5 * 1024 * 1024
+# A bundle is a handful of receipts; cap their combined unpacked size so a
+# small archive cannot expand into gigabytes on disk (zip bomb).
+MAX_BUNDLE_BYTES = 10 * MAX_RECEIPT_BYTES
 
 
 class ReceiptError(Exception):
     pass
+
+
+class _HTTPOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects that would switch to a non-HTTP(S) scheme (file:, ftp:, ...)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if urllib.parse.urlparse(newurl).scheme not in ALLOWED_URL_SCHEMES:
+            raise urllib.error.HTTPError(newurl, code, msg, headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_URL_FETCH_OPENER = urllib.request.build_opener(_HTTPOnlyRedirectHandler)
 
 
 def receipts_dir() -> str:
@@ -27,19 +41,54 @@ def _unique_name(filename: str) -> str:
     return f"{uuid.uuid4().hex[:8]}-{secure_filename(filename) or 'receipt'}"
 
 
+def _copy_capped(src, dst, cap: int) -> int:
+    """Copy ``src`` to ``dst`` stopping after ``cap`` + 1 bytes; returns the
+    number of bytes written, so a result greater than ``cap`` means the
+    source exceeded the cap."""
+    written = 0
+    while written <= cap:
+        chunk = src.read(min(64 * 1024, cap + 1 - written))
+        if not chunk:
+            break
+        dst.write(chunk)
+        written += len(chunk)
+    return written
+
+
+def _remove(path: str) -> None:
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
 def save_upload(upload) -> str:
     ext = os.path.splitext(upload.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise ReceiptError(f"{ext or 'That file type'} is not a supported receipt format")
     name = _unique_name(upload.filename)
-    upload.save(os.path.join(receipts_dir(), name))
+    path = os.path.join(receipts_dir(), name)
+    try:
+        with open(path, "wb") as dst:
+            written = _copy_capped(upload.stream, dst, MAX_RECEIPT_BYTES)
+        if written > MAX_RECEIPT_BYTES:
+            raise ReceiptError("That receipt is larger than 5 MB")
+    except Exception:
+        _remove(path)
+        raise
     return name
 
 
 def fetch_from_url(url: str) -> str:
     """Download an e-receipt (ride share, airline, hotel folio...) and store it like an upload."""
     try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
+        scheme = urllib.parse.urlparse(url).scheme
+    except ValueError as exc:
+        raise ReceiptError(f"That receipt link is not a valid URL: {exc}") from exc
+    if scheme not in ALLOWED_URL_SCHEMES:
+        raise ReceiptError("Receipt links must be an http:// or https:// URL")
+    try:
+        with _URL_FETCH_OPENER.open(url, timeout=10) as resp:
             data = resp.read(MAX_RECEIPT_BYTES + 1)
     except (OSError, ValueError) as exc:
         raise ReceiptError(f"Could not download the receipt: {exc}") from exc
@@ -53,6 +102,19 @@ def fetch_from_url(url: str) -> str:
     return name
 
 
+def _copy_capped(src, dst) -> int:
+    """Copy src to dst, refusing to unpack more than one receipt's worth of data."""
+    total = 0
+    while True:
+        chunk = src.read(min(1024 * 1024, MAX_RECEIPT_BYTES + 1 - total))
+        if not chunk:
+            return total
+        dst.write(chunk)
+        total += len(chunk)
+        if total > MAX_RECEIPT_BYTES:
+            raise ReceiptError("A receipt in that bundle is larger than 5 MB")
+
+
 def extract_bundle(fileobj) -> list[str]:
     """Unpack a zip of receipts (e.g. exported from a phone's photo library)."""
     try:
@@ -61,17 +123,36 @@ def extract_bundle(fileobj) -> list[str]:
         raise ReceiptError("That file is not a zip archive") from exc
 
     names = []
-    with archive:
-        for info in archive.infolist():
-            if info.is_dir() or info.filename.startswith("__MACOSX"):
-                continue
-            target = os.path.join(receipts_dir(), info.filename)
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            with archive.open(info) as src, open(target, "wb") as dst:
-                shutil.copyfileobj(src, dst)
-            names.append(info.filename)
+    extracted = []
+    total = 0
+    try:
+        with archive:
+            for info in archive.infolist():
+                if info.is_dir() or info.filename.startswith("__MACOSX"):
+                    continue
+                if info.file_size > MAX_RECEIPT_BYTES:
+                    raise ReceiptError(f'"{info.filename}" is larger than 5 MB')
+                target = os.path.join(receipts_dir(), info.filename)
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                extracted.append(target)
+                with archive.open(info) as src, open(target, "wb") as dst:
+                    written = _copy_capped(src, dst, MAX_RECEIPT_BYTES)
+                if written > MAX_RECEIPT_BYTES:
+                    raise ReceiptError(f'"{info.filename}" is larger than 5 MB')
+                total += written
+                if total > MAX_BUNDLE_BYTES:
+                    raise ReceiptError("That bundle unpacks to more than 50 MB")
+                names.append(info.filename)
+    except Exception:
+        for path in extracted:
+            _remove(path)
+        raise
     return names
 
 
 def receipt_path(name: str) -> str:
-    return os.path.join(receipts_dir(), name)
+    base = os.path.realpath(receipts_dir())
+    target = os.path.realpath(os.path.join(base, name))
+    if not target.startswith(base + os.sep):
+        raise ReceiptError(f"Unsafe receipt path: {name!r}")
+    return target
