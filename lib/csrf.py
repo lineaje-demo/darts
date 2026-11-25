@@ -24,7 +24,9 @@ def protect(app) -> None:
             return
         expected = session.get(SESSION_KEY)
         supplied = request.form.get(FORM_FIELD, "")
-        if not expected or not hmac.compare_digest(expected, supplied):
+        if not expected or not hmac.compare_digest(
+            expected.encode("utf-8"), supplied.encode("utf-8")
+        ):
             abort(400, description="Invalid or missing CSRF token.")
 
     app.jinja_env.globals["csrf_token"] = csrf_token
