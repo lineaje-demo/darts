@@ -37,12 +37,26 @@ def approved_totals(group_by: str):
     return get_db().execute(queries[group_by]).fetchall()
 
 
+# Characters a spreadsheet application treats as the start of a formula when
+# they begin a cell; tab/CR prefixes are smuggled past naive checks the same way.
+_FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_cell(value) -> str:
+    """Render one cell as inert text, prefixing a quote if it would parse as a formula."""
+    text = "" if value is None else str(value)
+    if text.startswith(_FORMULA_TRIGGERS):
+        return "'" + text
+    return text
+
+
 def write_csv(out, expenses) -> None:
     writer = csv.writer(out)
     writer.writerow(CSV_HEADER)
     for e in expenses:
-        writer.writerow([e["id"], e["employee"], e["spent_on"], e["merchant"], e["category"],
-                         f"{e['amount_cents'] / 100:.2f}", e["status"], e["description"]])
+        writer.writerow([_csv_cell(cell) for cell in (
+            e["id"], e["employee"], e["spent_on"], e["merchant"], e["category"],
+            f"{e['amount_cents'] / 100:.2f}", e["status"], e["description"])])
 
 
 def build_month_end_pack(month: str, pack_name: str) -> str:
