@@ -14,6 +14,18 @@ from services import receipts
 STATUSES = ("approved", "submitted", "flagged", "rejected", "draft")
 CSV_HEADER = ["id", "employee", "date", "merchant", "category", "amount", "status", "description"]
 
+# Characters a spreadsheet application treats as the start of a formula when they
+# begin a cell (OWASP CSV Injection guidance); tab/CR are included because some
+# parsers skip them before evaluating the cell.
+FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value):
+    """Neutralize a CSV cell so spreadsheets cannot interpret it as a formula."""
+    if isinstance(value, str) and value[:1] in FORMULA_PREFIXES:
+        return "'" + value
+    return value
+
 
 def fetch_expenses(status: str | None = None, month: str | None = None):
     sql = "SELECT e.*, u.name AS employee FROM expenses e JOIN users u ON u.id = e.user_id WHERE 1 = 1"
@@ -41,8 +53,9 @@ def write_csv(out, expenses) -> None:
     writer = csv.writer(out)
     writer.writerow(CSV_HEADER)
     for e in expenses:
-        writer.writerow([e["id"], e["employee"], e["spent_on"], e["merchant"], e["category"],
-                         f"{e['amount_cents'] / 100:.2f}", e["status"], e["description"]])
+        writer.writerow([_csv_safe(cell) for cell in [
+            e["id"], e["employee"], e["spent_on"], e["merchant"], e["category"],
+            f"{e['amount_cents'] / 100:.2f}", e["status"], e["description"]]])
 
 
 def build_month_end_pack(month: str, pack_name: str) -> str:
@@ -55,8 +68,9 @@ def build_month_end_pack(month: str, pack_name: str) -> str:
             write_csv(fh, expenses)
         os.makedirs(os.path.join(workdir, "receipts"))
         for e in expenses:
-            if e["receipt"] and os.path.isfile(receipts.receipt_path(e["receipt"])):
-                shutil.copy(receipts.receipt_path(e["receipt"]), os.path.join(workdir, "receipts"))
+            path = receipts.receipt_path(e["receipt"]) if e["receipt"] else None
+            if path and os.path.isfile(path):
+                shutil.copy(path, os.path.join(workdir, "receipts"))
 
         archive = f"{pack_name}.tar.gz"
         subprocess.run(f"tar -czf {os.path.join(reports_dir, archive)} -C {workdir} .", shell=True, check=True)
