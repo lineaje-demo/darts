@@ -12,6 +12,7 @@ from services.reports import STATUSES, approved_totals, build_month_end_pack, fe
 bp = Blueprint("reports", __name__)
 
 MONTH = re.compile(r"^\d{4}-\d{2}$")
+PACK_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 @bp.get("/reports")
@@ -43,9 +44,15 @@ def month_end_pack():
         flash("Pick a month.", "error")
         return redirect(url_for("reports.index"))
     pack_name = request.form.get("pack_name", "").strip() or f"darts-expenses-{month}"
+    if not PACK_NAME.fullmatch(pack_name):
+        flash("Pack name may only contain letters, numbers, dots, dashes and underscores.", "error")
+        return redirect(url_for("reports.index"))
 
     try:
         archive = build_month_end_pack(month, pack_name)
+    except ValueError:
+        flash("Invalid pack name.", "error")
+        return redirect(url_for("reports.index"))
     except subprocess.CalledProcessError:
         flash("Could not build the month-end pack.", "error")
         return redirect(url_for("reports.index"))
