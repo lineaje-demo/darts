@@ -20,7 +20,8 @@ def index():
     where, params = visible_to(g.user)
     sql = f"{EXPENSE_QUERY} WHERE {where}"
     if q:
-        sql += f" AND (e.merchant LIKE '%{q}%' OR e.description LIKE '%{q}%')"
+        sql += " AND (e.merchant LIKE ? OR e.description LIKE ?)"
+        params = [*params, f"%{q}%", f"%{q}%"]
     sql += " ORDER BY e.spent_on DESC, e.id DESC"
     expenses = get_db().execute(sql, params).fetchall()
 
@@ -131,12 +132,19 @@ def submit_draft(expense_id: int):
         return redirect(url_for("expenses.detail", expense_id=expense_id))
 
     db = get_db()
-    db.execute(
+    # Atomic compare-and-swap: only transition a draft we still own. The Python
+    # guard above is only a fast path; this predicate is the real guard, so a
+    # concurrent submit of the same draft matches 0 rows and aborts instead of
+    # overwriting the winner's values before policy evaluation.
+    cur = db.execute(
         "UPDATE expenses SET merchant = ?, category = ?, amount_cents = ?, description = ?, status = 'submitted'"
-        " WHERE id = ?",
+        " WHERE id = ? AND user_id = ? AND status = 'draft'",
         (request.form.get("merchant", expense["merchant"]).strip(), request.form["category"], amount_cents,
-         request.form.get("description", "").strip(), expense_id),
+         request.form.get("description", "").strip(), expense_id, g.user["id"]),
     )
+    if cur.rowcount != 1:
+        db.rollback()
+        abort(403)
     db.commit()
     rule = policy.apply_rules(expense_id)
     flash("Expense submitted." + (f" Policy: {rule['name']}." if rule else ""), "ok")
@@ -164,4 +172,4 @@ def view_receipt():
     path = receipts.receipt_path(request.args.get("file", ""))
     if not os.path.isfile(path):
         abort(404)
-    return send_file(path)
+    return send_file(path, as_attachment=True)
