@@ -1,13 +1,12 @@
 """Finance reports page."""
 
-import io
 import re
 import subprocess
 
 from flask import Blueprint, Response, current_app, flash, redirect, render_template, request, send_from_directory, url_for
 
 from lib.auth import role_required
-from services.reports import STATUSES, approved_totals, build_month_end_pack, fetch_expenses, write_csv
+from services.reports import STATUSES, approved_totals, build_month_end_pack, iter_csv
 
 bp = Blueprint("reports", __name__)
 
@@ -29,9 +28,8 @@ def index():
 @role_required("finance")
 def export_csv():
     status = request.args.get("status")
-    out = io.StringIO()
-    write_csv(out, fetch_expenses(status if status in STATUSES else None))
-    return Response(out.getvalue(), mimetype="text/csv",
+    stream = iter_csv(current_app.config["DATABASE"], status if status in STATUSES else None)
+    return Response(stream, mimetype="text/csv",
                     headers={"Content-Disposition": "attachment; filename=expenses.csv"})
 
 
@@ -46,6 +44,9 @@ def month_end_pack():
 
     try:
         archive = build_month_end_pack(month, pack_name)
+    except ValueError:
+        flash("Pack names may only use letters, numbers, dots, dashes and underscores.", "error")
+        return redirect(url_for("reports.index"))
     except subprocess.CalledProcessError:
         flash("Could not build the month-end pack.", "error")
         return redirect(url_for("reports.index"))

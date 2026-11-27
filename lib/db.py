@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     status        TEXT NOT NULL DEFAULT 'submitted',  -- draft | submitted | flagged | approved | rejected
     created_at    TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_expenses_spent_on ON expenses(spent_on);
 CREATE TABLE IF NOT EXISTS comments (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     expense_id  INTEGER NOT NULL REFERENCES expenses(id),
@@ -40,6 +41,11 @@ CREATE TABLE IF NOT EXISTS rules (
     name       TEXT NOT NULL,
     condition  TEXT NOT NULL,
     action     TEXT NOT NULL                -- approve | flag | reject
+);
+CREATE TABLE IF NOT EXISTS sessions (
+    id          TEXT PRIMARY KEY,          -- random token carried by the session cookie
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    created_at  TEXT NOT NULL
 );
 """
 
@@ -116,6 +122,8 @@ def parse_amount(text: str) -> int:
         value = Decimal(text.replace(",", "").replace("$", "").strip())
     except InvalidOperation:
         raise ValueError("Enter the amount as a number, e.g. 42.50") from None
+    if not value.is_finite():
+        raise ValueError("Enter the amount as a number, e.g. 42.50")
     if value <= 0 or value > 100000:
         raise ValueError("Amount must be between $0.01 and $100,000")
     return int(value.quantize(Decimal("0.01")) * 100)
